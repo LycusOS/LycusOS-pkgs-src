@@ -1,0 +1,31 @@
+pkgname=lycusos-hooks
+pkgver=0.1
+pkgrel=0
+pkgdesc='LycusOS pacman hooks'
+arch=('any')
+license=('GPL3')
+
+source=(
+  ${pkgname}.hook
+  ${pkgname}-runner
+  lycusos-lsb-release.hook
+  lycusos-os-release.hook
+  lycusos-grub.hook
+)
+
+sha512sums=('4cbc6d28fcdf9a76c3b31235b4e4d95ef7800098f0c2b03857c6118653fa66f2dbb93922787c97d7307c5af965354431a816a0fb7b98e3e64defe05284e4745c'
+  	        'dbdc03002c7be74955f22ec1f8a664a5da467273f0ac60ac836a8c3c0bfcd1b3328098546ea3d9571071dfe5910093a5f5c73e4892d3f3539525d26a6f46dbee'
+            '978c7366abfa2008b626f9adecd604598506478769c4f4cd49b792079293a7578539689cda49563aba1a86bf72d8e8e35ebb1cc59dd57dc2e236a6fcb3128424'
+            'ade30876ce8e63b0c45b0a0bccbb5bac67c9d9fc84123158b87e93ff2ff851bd210989cbc8654c80f98d60fe2003ddc636590c7a074e0836760626a26726b05c'
+            'f7e9940e6375520e28c69525e8aa6f49ef9b25ac77fe53f5a1cc0fd68e5ae7255d4724d9ed69f19e52d44eb7b642ef3c9e17950ae3319679db5942fc34816fbc')
+
+package() {
+  local hooks=$pkgdir/usr/share/libalpm/hooks
+  local bin=$pkgdir/usr/bin
+
+  install -Dm644 lycusos-lsb-release.hook	  $hooks/lycusos-lsb-release.hook
+  install -Dm644 lycusos-os-release.hook	  $hooks/lycusos-os-release.hook
+  install -Dm644 lycusos-grub.hook	        $hooks/lycusos-grub.hook
+  install -Dm644 ${pkgname}.hook           	$hooks/${pkgname}.hook
+  install -Dm755 ${pkgname}-runner         	$bin/${pkgname}-runner
+}

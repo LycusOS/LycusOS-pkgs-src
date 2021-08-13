@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = lycusos-hooks
+
+[Action]
+Description = Updating LycusOS specific config...
+When = PostTransaction
+Exec = /usr/bin/lycusos-hooks-runner
