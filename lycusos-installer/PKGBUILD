@@ -1,0 +1,16 @@
+pkgname=lycusos-installer
+pkgver=0.1
+pkgrel=0
+pkgdesc='LycusOS installer'
+arch=('any')
+license=('GPL3')
+
+source=(
+  ${pkgname}
+)
+
+sha512sums=('46fdfa51533acccaf9b59e346e17e60615244f9452c24d5156fb165f6cccb99a35edc46f41541ae977fc16f2ec710227db81a9012cae629afead5530d1e99d85')
+
+package() {
+  install -Dm755 ${pkgname} $pkgdir/usr/bin/${pkgname}
+}

@@ -1,0 +1,84 @@
+#!/bin/bash
+
+parted -s /dev/sda -- mklabel gpt
+parted -s /dev/sda -- mkpart primary fat32 1MiB 256MiB
+parted -s /dev/sda -- mkpart primary btrfs 256MiB 100%
+
+parted -s /dev/sda -- set 1 esp on
+
+mkfs.fat -F 32 -n boot /dev/sda1
+mkfs.btrfs -L root /dev/sda2
+
+mount /dev/sda2 /mnt
+
+btrfs subvol create /mnt/@root
+btrfs subvol create /mnt/@home
+btrfs subvol create /mnt/@lycusos
+
+umount -lR /mnt
+
+mount -o subvol=@root /dev/sda2 /mnt
+
+mkdir /mnt/boot
+mkdir /mnt/boot/efi
+mkdir /mnt/home
+mkdir /mnt/lycusos
+
+mount -o subvol=@home /dev/sda2 /mnt/home
+mount -o subvol=@lycusos /dev/sda2 /mnt/lycusos
+
+mount /dev/sda1 /mnt/boot/efi
+
+pacstrap /mnt base linux-zen btrfs-progs
+pacstrap -c /mnt/lycusos base
+
+genfstab -L /mnt > /mnt/etc/fstab
+grep 'home' /mnt/etc/fstab > /mnt/lycusos/etc/fstab
+
+if [[ -z $(grep 'LycusOS' /mnt/etc/pacman.conf) ]] ; then
+cat << EOF >> /mnt/etc/pacman.conf
+
+[LycusOS-pkgs-repo]
+SigLevel = Optional TrustAll
+Server = https://lycusos.github.io/LycusOS-pkgs-repo/\$arch
+EOF
+fi
+cp -f /mnt/etc/pacman.conf /mnt/lycusos/etc/pacman.conf
+
+arch-chroot /mnt pacman -Sy --noconfirm lycusos-hooks grub efibootmgr arch-install-scripts
+arch-chroot /mnt/lycusos pacman -Sy --noconfirm lycusos-hooks base-devel
+
+ln -sf /mnt/usr/share/zoneinfo/Asia/Kolkata /mnt/etc/localtime
+ln -sf /mnt/lycusos/usr/share/zoneinfo/Asia/Kolkata /mnt/lycusos/etc/localtime
+
+arch-chroot /mnt hwclock --systohc
+arch-chroot /mnt/lycusos hwclock --systohc
+
+sed -i 's|#en_US.U|en_US.U|' /mnt/etc/locale.gen
+sed -i 's|#en_US.U|en_US.U|' /mnt/lycusos/etc/locale.gen
+
+arch-chroot /mnt locale-gen
+arch-chroot /mnt/lycusos locale-gen
+
+echo 'LANG=en_US.UTF-8' > /mnt/etc/locale.conf
+echo 'LANG=en_US.UTF-8' > /mnt/lycusos/etc/locale.conf
+
+echo 'silver' > /mnt/etc/hostname
+echo 'silver' > /mnt/lycusos/etc/hostname
+
+cat << EOF > /mnt/etc/hosts
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   silver.localdomain  silver
+EOF
+cp -f /mnt/etc/hosts /mnt/lycusos/etc/hosts
+
+arch-chroot /mnt mkinitcpio -P
+
+arch-chroot /mnt passwd
+cp -f /mnt/etc/shadow /mnt/lycusos/etc/shadow
+
+arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=LycusOS
+arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+
+# TODO rename archlinux to lycusos for grub
