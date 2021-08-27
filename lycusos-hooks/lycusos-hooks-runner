@@ -32,21 +32,7 @@ os_release() {
 }
 
 grub() {
-    local file=/etc/grub.d/10_linux
-
-    if [[ -f $file ]]; then
-        sed -i 's|{GRUB_DISTRIBUTOR} Linux|{GRUB_DISTRIBUTOR}|' $file
-        
-        if [[ -z $(grep 'isolated' $file) ]]; then
-            sed -i "/\"\${version}\" simple/i \\
-            \n    isolated() { \
-            \n        local GRUB_CMDLINE_LINUX=\$(echo \${GRUB_CMDLINE_LINUX} | sed 's|subvol=.*$|subvol=@lycusos|') \
-            \n        linux_entry \"\${OS} default\" \"\${version}\" simple \"\${GRUB_CMDLINE_LINUX} \${GRUB_CMDLINE_LINUX_DEFAULT}\" \
-            \n    } \
-            \n    isolated\n" $file
-        fi
-    fi
-
+    sed -i 's|{GRUB_DISTRIBUTOR} Linux|{GRUB_DISTRIBUTOR}|' /etc/grub.d/10_linux
     sed -i 's|^GRUB_DISTRIBUTOR=.*$|GRUB_DISTRIBUTOR=LycusOS|' /etc/default/grub
 }
 
@@ -59,14 +45,14 @@ main()
     local hookname="$1"
 
     case "$hookname" in
-        os-release)  os_release ;;
-        lsb-release) lsb_release ;;
-        grub)        grub ;;
-        "")          os_release
-                     lsb_release
-                     issues
-                     grub
-                     ;;
+        os-release)     os_release ;;
+        lsb-release)    lsb_release ;;
+        grub)               grub ;;
+        "")                     os_release
+                                 lsb_release
+                                 issues
+                                 grub
+                                 ;;
     esac
 }
 
