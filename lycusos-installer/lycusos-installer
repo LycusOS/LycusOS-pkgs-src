@@ -47,7 +47,7 @@ Include = /etc/pacman.d/chaotic-mirrorlist
 EOF
 fi
 
-arch-chroot /mnt pacman -Sy --noconfirm lycusos-hooks lycusos-dotfiles grub efibootmgr
+arch-chroot /mnt pacman -Sy --noconfirm lycusos-hooks lycusos-dotfiles grub efibootmgr sudo nvim dhcpcd
 
 ln -sf /mnt/usr/share/zoneinfo/Asia/Kolkata /mnt/etc/localtime
 
