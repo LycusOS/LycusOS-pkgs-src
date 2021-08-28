@@ -1,0 +1,76 @@
+[global]
+    monitor = 0
+    follow = mouse
+    indicate_hidden = yes
+    
+    idle_threshold = 120
+    show_age_threshold = 60
+
+    progress_bar = true
+    progress_bar_height = 10
+    progress_bar_frame_width = 1
+    progress_bar_min_width = 150
+    progress_bar_max_width = 300
+   
+   geometry = "200x38-12+62"
+    transparency = 0
+    notification_height = 0
+    separator_height = 1
+    padding = 8
+    horizontal_padding = 8
+    frame_width = 0
+    frame_color = "#aaaaaa"
+    separator_color = frame    
+    font = 'Noto Sans Bold 12'
+    line_height = 0
+    markup = full
+    format = "%s\n%b"
+    alignment = left
+    vertical_alignment = center
+    ellipsize = middle
+    ignore_newline = no
+    shrink = yes
+    sort = yes
+    word_wrap = yes
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = yes
+
+    icon_position = left
+    min_icon_size = 0
+    max_icon_size = 20
+
+    sticky_history = yes
+    history_length = 20
+    
+    always_run_script = true
+    title = Dunst
+    class = Dunst
+    startup_notification = false
+    verbosity = mesg
+    corner_radius = 0
+    ignore_dbusclose = false
+    force_xinerama = false
+
+    mouse_left_click = do_action, close_current
+    mouse_middle_click = close_all
+    mouse_right_click = close_current
+
+[experimental]
+    per_monitor_dpi = false
+
+[urgency_low]
+    background = "#151515"
+    foreground = "#DFDFDF"
+    timeout = 5
+
+[urgency_normal]
+    background = "#151515"
+    foreground = "#DFDFDF"
+    timeout = 5
+
+[urgency_critical]
+    background = "#900000"
+    foreground = "#DFDFDF"
+    frame_color = "#ff0000"
+    timeout = 0

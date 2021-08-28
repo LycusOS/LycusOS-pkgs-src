@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 parted -s /dev/sda -- mklabel gpt
 parted -s /dev/sda -- mkpart primary fat32 1MiB 256MiB
@@ -30,16 +31,23 @@ pacstrap /mnt base linux-zen btrfs-progs
 
 genfstab -L /mnt > /mnt/etc/fstab
 
+arch-chroot /mnt pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com
+arch-chroot /mnt pacman-key --lsign-key 3056513887B78AEB
+arch-chroot /mnt pacman -U 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+
 if [[ -z $(grep 'LycusOS' /mnt/etc/pacman.conf) ]] ; then
 cat << EOF >> /mnt/etc/pacman.conf
 
 [LycusOS-pkgs-repo]
 SigLevel = Optional TrustAll
 Server = https://lycusos.github.io/LycusOS-pkgs-repo/\$arch
+
+[chaotic-aur]
+Include = /etc/pacman.d/chaotic-mirrorlist
 EOF
 fi
 
-arch-chroot /mnt pacman -Sy --noconfirm lycusos-hooks grub efibootmgr
+arch-chroot /mnt pacman -Sy --noconfirm lycusos-hooks lycusos-dotfiles grub efibootmgr
 
 ln -sf /mnt/usr/share/zoneinfo/Asia/Kolkata /mnt/etc/localtime
 

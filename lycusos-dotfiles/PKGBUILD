@@ -1,0 +1,12 @@
+pkgname=lycusos-dotfiles
+pkgver=0.1
+pkgrel=0
+pkgdesc='LycusOS dotfiles'
+arch=('any')
+license=('GPL3')
+
+package() {
+  local _config=${pkgdir}/etc/skel/.config/
+  mkdir -p $_config
+  cp -r $srcdir/* $_config
+}
