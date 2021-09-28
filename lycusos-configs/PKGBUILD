@@ -1,0 +1,17 @@
+pkgname=lycusos-configs
+pkgver=0.1
+pkgrel=0
+pkgdesc='LycusOS configs'
+arch=('any')
+license=('GPL3')
+install="${pkgname}.install"
+package() {
+	mkdir -p "${pkgdir}"/{etc,usr/{share/backgrounds,local/bin}}
+	cp -r "${srcdir}"/skel "${pkgdir}"/etc/skel/
+	cp -r "${srcdir}"/backgrounds "${pkgdir}"/usr/share/backgrounds/lycusos
+	install -Dm755 "${srcdir}"/bin/* "${pkgdir}"/usr/local/bin/
+	if cat /proc/bus/input/devices | grep -i touchpad > /dev/null; then
+		mkdir -p "${pkgdir}"/usr/share/X11/xorg.conf.d/
+		cp "${srcdir}"/xorg_confs/50-touchpad.conf "${pkgdir}"/usr/share/X11/xorg.conf.d/
+	fi
+}

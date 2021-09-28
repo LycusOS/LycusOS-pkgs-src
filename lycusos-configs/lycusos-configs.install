@@ -1,0 +1,23 @@
+post_install() {
+	local file=/etc/skel/.config/polybar/config
+	if ! dmesg | grep -i "battery" > /dev/null; then
+		sed -i 's|battery ||
+			100,122d' "${file}"
+	fi
+	if ! dmesg | grep -i "bluetooth" > /dev/null; then
+		sed -i 's|bluetooth ||
+			45,50d' "${file}"
+		rm /etc/skel/.config/rofi/{bluetooth.rasi,scripts/rofi-bluetooth}
+	fi
+	sed -i "s|^interface.*$|interface = $(ip link | grep -o '\w*wl\w*')|" "${file}"
+	if ! dmesg | grep -i "wlan0" > /dev/null; then
+		sed -i 's|wlan ||
+			72,80d' "${file}"
+	fi
+	if ! cat /etc/shells | grep "bashfish"; then
+		echo "/usr/local/bin/bashfish" >> /etc/shells
+	fi
+}
+post_upgrade() {
+	post_install
+}

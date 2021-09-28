@@ -1,20 +1,15 @@
 #!/bin/bash
-
 lsb_release() {
     local file=/etc/lsb-release
-
-    if [[ -z $(grep "^DISTRIB_RELEASE=" $file) ]]; then
-        echo "DISTRIB_RELEASE=rolling" >> $file
+    if [[ -z $(grep "^DISTRIB_RELEASE=" "${file}") ]]; then
+        echo "DISTRIB_RELEASE=rolling" >> "${file}"
     fi
-
     sed -i 's|^DISTRIB_ID=.*$|DISTRIB_ID=LycusOS|
             s|^DISTRIB_RELEASE=.*$|DISTRIB_RELEASE=rolling|
             s|^DISTRIB_DESCRIPTION=.*$|DISTRIB_DESCRIPTION=\"LycusOS\"|' $file
 }
-
 os_release() {
     local file=/usr/lib/os-release
-
     sed -i 's|^NAME=.*$|NAME=\"LycusOS\"|
             s|^PRETTY_NAME=.*$|PRETTY_NAME=\"LycusOS\"|
             s|^ID=.*$|ID=lycusos|
@@ -24,36 +19,30 @@ os_release() {
             s|^DOCUMENTATION_URL=.*$|DOCUMENTATION_URL=\"\"|
             s|^SUPPORT_URL=.*$|SUPPORT_URL=\"\"|
             s|^BUG_REPORT_URL=.*$|BUG_REPORT_URL=\"\"|
-            s|^LOGO=.*$|LOGO=lycusos|' $file
-
-    if [[ -z $(grep "^ID_LIKE=" $file) && -n $(grep "^ID=" $file) ]]; then
-        sed -i $file -e '/^ID=/a \ID_LIKE=arch'
+            s|^LOGO=.*$|LOGO=lycusos|' "${file}"
+    if [[ -z $(grep "^ID_LIKE=" "${file}") && -n $(grep "^ID=" "${file}") ]]; then
+        sed -i "${file}" -e '/^ID=/a \ID_LIKE=arch'
     fi
 }
-
 grub() {
     sed -i 's|{GRUB_DISTRIBUTOR} Linux|{GRUB_DISTRIBUTOR}|' /etc/grub.d/10_linux
     sed -i 's|^GRUB_DISTRIBUTOR=.*$|GRUB_DISTRIBUTOR=LycusOS|' /etc/default/grub
 }
-
 issues() {
     sed -i 's|Arch Linux|LycusOS|g' /etc/issue /usr/share/factory/etc/issue
 }
-
 main()
 {
-    local hookname="$1"
-
-    case "$hookname" in
-        os-release)     os_release ;;
-        lsb-release)    lsb_release ;;
-        grub)               grub ;;
-        "")                     os_release
-                                 lsb_release
-                                 issues
-                                 grub
-                                 ;;
+    local hookname="${1}"
+    case "${hookname}" in
+        "lsb-release")     lsb_release ;;
+        "os-release")      os_release ;;
+        "grub")            grub ;;
+        "")                os_release
+                           lsb_release
+                           issues
+                           grub
+                           ;;
     esac
 }
-
-main "$@"
+main "${@}"

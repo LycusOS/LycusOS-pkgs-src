@@ -1,75 +1,270 @@
 #!/bin/bash
-set -e
+key_layout() {
+	title="Key layout" default="us" \
+	menu $(find /usr/share/kbd/keymaps/ -type f -printf "%f\n" | sort -V | sed 's|.map.gz||' | sed '2d')
+	if [[ "${?}" == "0" ]]; then
+		KEYMAP="${selected_element}"
+		loadkeys "${KEYMAP}"
+	fi
+}
+wlan() {
+	local device=$(iwctl -- device list | grep -o '\w*wl\w*')
+	iwctl -- station "${device}" scan
+	iwctl -- station "${device}" get-networks
+	read -p "Enter network name/SSID: " ssid
+	iwctl -- station "${device}" connect "${ssid}"
+}
+partitions() {
+	formatter() {
+		local fstype="${1}"
+		if [[ "${fstype}" == "none" ]]; then
+			return 0
+		fi
+		if [[ -z "${FS_UTILS+x}" ]]; then
+			FS_UTILS=()
+		fi
+		case "${fstype}" in
+			"btrfs") FS_UTILS+=("btrfs-progs");;
+			"ext4") FS_UTILS+=("e2fsprogs");;
+			"f2fs") FS_UTILS+=("f2fs-tools");;
+			"fat32") FS_UTILS+=("dosfstools");;
+		esac
+		if [[ "${fstype}" == "fat32" ]]; then
+			fstype="vfat -F 32"
+		fi
+		wipefs -a "${2}" && eval mkfs."${fstype}" "${2}"
+	}
+	mounter() {
+		if [[ "${2}" == "other" ]]; then
+			mounter "${1}" $(whiptail --title "Mount ${1}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3)
+		fi
+		if ! [[ "${2}" == "/" ]]; then
+			if ! findmnt /mnt > /dev/null; then
+				whiptail --msgbox "Please mount root(/) partition first..." 0 0
+				return 1
+			fi
+		fi
+		mkdir -p /mnt/"${2}" && mount "${1}" /mnt/"${2}"
+	}
+	auto_partitions() {
+		title="Auto partitions" \
+		menu $(lsblk -dnp -o name)
+		if [[ "${?}" == "0" ]]; then
+			whiptail --title "Auto partitions" --yesno "Selected ${selected_element}, proceed?" 0 0 3>&1 1>&2 2>&3
+			if [[ "${?}" == "0" ]]; then
+				parted -s "${selected_element}" -- mklabel gpt
+				parted -s "${selected_element}" -- mkpart primary 1MiB 260MiB
+				parted -s "${selected_element}" -- mkpart primary 260MiB 100%
+				parted -s "${selected_element}" -- set 1 esp on
+				local partitions=($(blkid -o device "${selected_element}"* | sed '1d'))
+				formatter btrfs "${partitions[1]}"
+				formatter fat32 "${partitions[0]}"
+				mounter "${partitions[1]}" /
+				mounter "${partitions[0]}" /efi
+			fi
+		fi
+	}
+	manual_partitions() {
+		edit_partitions() {
+			title="Edit partitions" \
+			menu $(lsblk -dnp -o name)
+			if [[ "${?}" == "0" ]]; then
+				cgdisk "${selected_element}"
+				whiptail --title "Edit partitions" --yesno --defaultno "Continue editing partitions?" 0 0 3>&1 1>&2 2>&3
+				if [[ "${?}" == "0" ]]; then
+					"${FUNCNAME[0]}"
+				fi
+			fi
+		}
+		format_mount_partitions() {
+			title="Format&mount partitions" \
+			menu $(blkid -o device)
+			if [[ "${?}" == "0" ]]; then
+				local partition="${selected_element}"
+				title="${partition}" \
+				menu "btrfs" "ext4" "f2fs" "fat32" "none"
+				if [[ "${?}" == "0" ]]; then
+					formatter "${selected_element}" "${partition}"
+					title="${partition}" \
+					menu "/" "/efi" "other"
+					if [[ "${?}" == "0" ]]; then
+						mounter "${partition}" "${selected_element}"
+						whiptail --title "Format&mount partitions" --yesno "Continue format & mounting partitions?" 0 0 3>&1 1>&2 2>&3
+						if [[ "${?}" == "0" ]]; then
+							"${FUNCNAME[0]}"
+						fi
+					fi
+				fi
+			fi
+		}
+		title="Manual partitions" \
+		menu "Edit-partitions" "Format&mount-partitions"
+		action "edit_partitions" "format_mount_partitions"
+	}
+	title="Partitions" \
+	menu "Auto-partition" "Manual-partition"
+	action "auto_partitions" "manual_partitions"
+}
+install() {
+	if ! findmnt /mnt > /dev/null; then
+		whiptail --msgbox "Please mount the partitions first..." 0 0
+		return 1
+	fi
+	case $(lscpu | grep -i "name" | awk '{print $3}') in
+		"A"*) local cpu_microcode="amd-ucode";;
+		"I"*) local cpu_microcode="intel-ucode";;
+	esac
+	local video_drivers=()
+	for i in $(lspci | grep -i "vga" | awk '{print $5}'); do
+		case "${i}" in
+			"A"*) video_drivers+=("xf86-video-amdgpu");;
+			"I"*) video_drivers+=("xf86-video-intel");;
+			"N"*) video_drivers+=("nvidia-dkms" "linux-zen-headers");;
+		esac
+	done
+	timedatectl set-ntp true
+	pacstrap /mnt base linux-zen linux-firmware "${FS_UTILS[@]}"
+	genfstab -U /mnt > /mnt/etc/fstab
+	sed -i 's|^keyserver .*$|keyserver hkp://keyserver.ubuntu.com:80|' /mnt/etc/pacman.d/gnupg/gpg.conf
+	arch-chroot /mnt pacman-key --recv-key 3056513887B78AEB
+	arch-chroot /mnt pacman-key --lsign-key 3056513887B78AEB
+	arch-chroot /mnt pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
+											'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+	cat <<- EOF >> /mnt/etc/pacman.conf
 
-parted -s /dev/sda -- mklabel gpt
-parted -s /dev/sda -- mkpart primary fat32 1MiB 256MiB
-parted -s /dev/sda -- mkpart primary btrfs 256MiB 100%
+		[LycusOS-pkgs-repo]
+		SigLevel = Optional TrustAll
+		Server = https://lycusos.github.io/LycusOS-pkgs-repo/\$arch
 
-parted -s /dev/sda -- set 1 esp on
-
-mkfs.fat -F 32 -n boot /dev/sda1
-mkfs.btrfs -L root /dev/sda2
-
-mount /dev/sda2 /mnt
-
-btrfs subvol create /mnt/@root
-btrfs subvol create /mnt/@home
-
-umount -lR /mnt
-
-mount -o subvol=@root /dev/sda2 /mnt
-
-mkdir /mnt/boot
-mkdir /mnt/boot/efi
-mkdir /mnt/home
-
-mount -o subvol=@home /dev/sda2 /mnt/home
-
-mount /dev/sda1 /mnt/boot/efi
-
-pacstrap /mnt base linux-zen btrfs-progs
-
-genfstab -L /mnt > /mnt/etc/fstab
-
-arch-chroot /mnt pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com
-arch-chroot /mnt pacman-key --lsign-key 3056513887B78AEB
-arch-chroot /mnt pacman -U 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
-
-if [[ -z $(grep 'LycusOS' /mnt/etc/pacman.conf) ]] ; then
-cat << EOF >> /mnt/etc/pacman.conf
-
-[LycusOS-pkgs-repo]
-SigLevel = Optional TrustAll
-Server = https://lycusos.github.io/LycusOS-pkgs-repo/\$arch
-
-[chaotic-aur]
-Include = /etc/pacman.d/chaotic-mirrorlist
-EOF
+		[chaotic-aur]
+		Include = /etc/pacman.d/chaotic-mirrorlist
+	EOF
+	arch-chroot /mnt pacman -Sy --noconfirm --needed acpilight alacritty \
+													 betterlockscreen bspwm \
+													 celluloid chromium \
+													 dunst \
+													 efibootmgr eog \
+													 fish \
+													 grub gvfs-mtp \
+													 libnotify lxappearance-gtk3 lycusos-configs lycusos-hooks \
+													 neovim networkmanager nitrogen noto-fonts \
+													 orchis-theme-git \
+													 pamixer picom-ibhagwan-git polkit-gnome polybar pulseaudio \
+													 rofi \
+													 scrot sudo sxhkd \
+													 tar tela-circle-icon-theme-git thunar ttf-font-awesome \
+													 unzip \
+													 vimix-cursors \
+													 xarchiver xorg-server xorg-xinit xorg-xsetroot \
+													 zip \
+													 "${cpu_microcode}" "${video_drivers[@]}"
+	arch-chroot /mnt systemctl enable NetworkManager
+	arch-chroot /mnt mkinitcpio -P
+	arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=LycusOS
+	arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+	if dmesg | grep -i "bluetooth" > /dev/null; then
+		arch-chroot /mnt pacman -S --needed --noconfirm bluez bluez-utils pulseaudio-bluetooth
+		arch-chroot /mnt systemctl enable bluetooth
+	fi
+	sed -i "s|# %wheel ALL=(ALL) ALL|%wheel ALL=(ALL) ALL|" /mnt/etc/sudoers
+	echo "KEYMAP=${KEYMAP:-us}" > /mnt/etc/vconsole.conf
+}
+config() {
+	timezone() {
+		title="Timezone" default="Asia" \
+		menu $(ls -l /usr/share/zoneinfo/ | grep '^d' | gawk -F':[0-9]* ' '/:/{print $2}')
+		if [[ "${?}" == "0" ]]; then
+			local timezone="${selected_element}"
+			title="Timezone" default="Kolkata" \
+			menu $(ls /usr/share/zoneinfo/"${timezone}")
+			if [[ "${?}" == "0" ]]; then
+				ln -sf /mnt/usr/share/zoneinfo/"${timezone}"/"${selected_element}" /mnt/etc/localtime
+				arch-chroot /mnt hwclock --systohc
+			fi
+		fi
+	}
+	locale() {
+		title="Locale" default="en_US.UTF-8" \
+		menu $(cat /etc/locale.gen | sed '1,23d' | sed 's|#||' | awk '{print $1}')
+		if [[ "${?}" == "0" ]]; then
+			sed -i "s|^#${selected_element}|${selected_element}|" /mnt/etc/locale.gen
+			echo "LANG=${selected_element}" > /mnt/etc/locale.conf
+			arch-chroot /mnt locale-gen
+		fi
+	}
+	hostname() {
+		local hostname
+		hostname=$(whiptail --title "Hostname" --inputbox "Enter hostname" 0 0 3>&1 1>&2 2>&3)
+		if [[ "${?}" == "0" ]]; then
+			echo "${hostname}" > /mnt/etc/hostname
+			cat <<- EOF > /mnt/etc/hosts
+				127.0.0.1   localhost
+				::1 localhost
+				127.0.1.1   ${hostname}.localdomain  ${hostname}
+			EOF
+		fi
+	}
+	users() {
+		root_passwd() {
+			arch-chroot /mnt passwd
+			if ! [[ "${?}" == 0 ]]; then
+				whiptail --msgbox "Couldn't set password for root, please try again!" 0 0
+			fi
+			arch
+		}
+		add_user() {
+			local user
+			user=$(whiptail --title "Add user (with sudo perms)" --inputbox "Enter username" 0 0 3>&1 1>&2 2>&3)
+			if [[ "${?}" == "0" ]]; then
+				arch-chroot /mnt useradd -m -s /usr/local/bin/bashfish -G wheel,video "${user}"
+				arch-chroot /mnt passwd "${user}"
+				if ! [[ "${?}" == 0 ]]; then
+					whiptail --msgbox "Couldn't set password for ${user}, please try again!" 0 0
+				fi
+				arch-chroot /mnt systemctl enable betterlockscreen@"${user}"
+			fi
+		}
+		title="Users" \
+		menu "Root-password" "Add-user"
+		action "root_passwd" "add_user"
+	}
+	title="Configure" \
+	menu "Timezone" "Locale" "Hostname" "Users"
+	action "timezone" "locale" "hostname" "users"
+}
+reboot() {
+	umount -R /mnt
+	systemctl reboot
+}
+main() {
+	menu() {
+		elements_array=()
+		for i in "${@}"; do
+			elements_array+=("${i}" "")
+		done
+		selected_element=$(whiptail --menu "" --title "${title}" --default-item "${default}" --cancel-button "${cancel:-Back}" 0 0 0 "${elements_array[@]}" 3>&1 1>&2 2>&3)
+	}
+	action() {
+		if [[ "${?}" == "0" ]]; then
+			for i in $(seq 0 2 $(("${#elements_array[@]}"-2))); do
+				if [[ "${elements_array[${i}]}" == "${selected_element}" ]]; then
+					local functions_array=("${@}")
+					local default="${elements_array[$((${i}+2))]}"
+					if [[ "${i}" == $(("${#elements_array[@]}"-2)) ]]; then
+						default="${elements_array[${i}]}"
+					fi
+					"${functions_array[$((${i}/2))]}"
+					"${FUNCNAME[1]}"
+				fi
+			done
+		fi
+		clear
+	}
+	title="LycusOS installer" cancel="Exit" \
+	menu "Key-layout(optional)" "Wlan/Wifi(optional)" "Partitions" "Install" "Configure" "Reboot"
+	action "key_layout" "wlan" "partitions" "install" "config" "reboot"
+}
+if findmnt /mnt > /dev/null; then
+	umount -R /mnt
 fi
-
-arch-chroot /mnt pacman -Sy --noconfirm lycusos-hooks lycusos-dotfiles grub efibootmgr sudo nvim dhcpcd
-
-ln -sf /mnt/usr/share/zoneinfo/Asia/Kolkata /mnt/etc/localtime
-
-arch-chroot /mnt hwclock --systohc
-
-sed -i 's|#en_US.U|en_US.U|' /mnt/etc/locale.gen
-
-arch-chroot /mnt locale-gen
-
-echo 'LANG=en_US.UTF-8' > /mnt/etc/locale.conf
-
-echo 'silver' > /mnt/etc/hostname
-
-cat << EOF > /mnt/etc/hosts
-127.0.0.1   localhost
-::1         localhost
-127.0.1.1   silver.localdomain  silver
-EOF
-
-arch-chroot /mnt mkinitcpio -P
-
-arch-chroot /mnt passwd
-
-arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=LycusOS
-arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+main
