@@ -1,0 +1,3 @@
+[submodule "LycusOS-pkgs-repo"]
+	path = LycusOS-pkgs-repo
+	url = git@github.com:LycusOS/LycusOS-pkgs-repo
