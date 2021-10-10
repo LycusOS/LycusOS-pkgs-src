@@ -8,7 +8,9 @@ configuration {
 }
 
 window {
-        width: 170;
+  width: 170;
+  x-offset: -220px;
+  y-offset: 62px;
 }
 
 * {
@@ -19,11 +21,6 @@ window {
 
 prompt, textbox-prompt-colon, case-indicator, entry {
   enabled: false;
-}
-
-window {
-  x-offset: -220px;
-  y-offset: 62px;
 }
 
 mainbox, listview, element {

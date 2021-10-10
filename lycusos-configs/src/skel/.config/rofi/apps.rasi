@@ -2,15 +2,10 @@ configuration {
 	font: "Noto Sans Medium 12";
 	me-select-entry: "MouseSecondary";
 	me-accept-entry: "MousePrimary";
-	location: 3;
-	fixed-num-lines: false;
-	hover-select: true;
 }
 
 window {
-	width: 170px;
-  x-offset: -12px;
-  y-offset: 62px;
+        width: 250;
 }
 
 * {
@@ -19,16 +14,21 @@ window {
   selected: #a0a0a0;
 }
 
-prompt, textbox-prompt-colon, case-indicator, entry {
+entry {
+  padding: 12px 12px 0px 12px;
+}
+
+prompt, textbox-prompt-colon, case-indicator {
   enabled: false;
 }
 
-mainbox, listview, element {
+mainbox, entry, listview, element {
   background-color: @background;
   text-color: @foreground;
 }
 
 listview {
+  lines: 4;
   padding: 6px;
   spacing: 6px;
   cycle: false;
@@ -41,7 +41,7 @@ element-text selected {
 }
 
 element-text {
-    padding: 6px;
-    background-color: inherit;
-    text-color:       inherit;
+  padding: 6px;
+  background-color: inherit;
+  text-color:       inherit;
 }
