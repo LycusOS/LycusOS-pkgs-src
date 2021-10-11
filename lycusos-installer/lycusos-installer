@@ -17,9 +17,6 @@ wlan() {
 partitions() {
 	formatter() {
 		local fstype="${1}"
-		if [[ "${fstype}" == "none" ]]; then
-			return 0
-		fi
 		if [[ -z "${FS_UTILS+x}" ]]; then
 			FS_UTILS=()
 		fi
@@ -35,16 +32,17 @@ partitions() {
 		wipefs -a "${2}" && eval mkfs."${fstype}" "${2}"
 	}
 	mounter() {
-		if [[ "${2}" == "other" ]]; then
-			mounter "${1}" $(whiptail --title "Mount ${1}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3)
-		fi
 		if ! [[ "${2}" == "/" ]]; then
 			if ! findmnt /mnt > /dev/null; then
 				whiptail --msgbox "Please mount root(/) partition first..." 0 0
 				return 1
 			fi
 		fi
-		mkdir -p /mnt/"${2}" && mount "${1}" /mnt/"${2}"
+		if [[ "${2}" == "other" ]]; then
+			mounter "${1}" $(whiptail --title "Mount ${1}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3)
+		else
+			mkdir -p /mnt/"${2}" && mount "${1}" /mnt/"${2}"
+		fi
 	}
 	auto_partitions() {
 		title="Auto partitions" \
@@ -76,30 +74,41 @@ partitions() {
 				fi
 			fi
 		}
-		format_mount_partitions() {
-			title="Format&mount partitions" \
+		format_partitions() {
+			title="Format partitions" \
 			menu $(blkid -o device)
 			if [[ "${?}" == "0" ]]; then
 				local partition="${selected_element}"
 				title="${partition}" \
-				menu "btrfs" "ext4" "f2fs" "fat32" "none"
+				menu "btrfs" "ext4" "f2fs" "fat32"
 				if [[ "${?}" == "0" ]]; then
 					formatter "${selected_element}" "${partition}"
-					title="${partition}" \
-					menu "/" "/efi" "other"
+					whiptail --title "Format partitions" --yesno "Continue to format partitions?" 0 0 3>&1 1>&2 2>&3
 					if [[ "${?}" == "0" ]]; then
-						mounter "${partition}" "${selected_element}"
-						whiptail --title "Format&mount partitions" --yesno "Continue format & mounting partitions?" 0 0 3>&1 1>&2 2>&3
-						if [[ "${?}" == "0" ]]; then
-							"${FUNCNAME[0]}"
-						fi
+						"${FUNCNAME[0]}"
+					fi
+				fi
+			fi
+		}
+		mount_partitions() {
+			title="Mount partitions" \
+			menu $(blkid -o device)
+			if [[ "${?}" == "0" ]]; then
+				local partition="${selected_element}"
+				title="${partition}" \
+				menu "/" "/efi" "other"
+				if [[ "${?}" == "0" ]]; then
+					mounter "${partition}" "${selected_element}"
+					whiptail --title "Format partitions" --yesno "Continue to mount partitions?" 0 0 3>&1 1>&2 2>&3
+					if [[ "${?}" == "0" ]]; then
+						"${FUNCNAME[0]}"
 					fi
 				fi
 			fi
 		}
 		title="Manual partitions" \
-		menu "Edit-partitions" "Format&mount-partitions"
-		action "edit_partitions" "format_mount_partitions"
+		menu "Edit-partitions" "Format-partitions" "Mount-partitions"
+		action "edit_partitions" "format_partitions" "mount_partitions"
 	}
 	title="Partitions" \
 	menu "Auto-partition" "Manual-partition"
@@ -126,6 +135,7 @@ install() {
 	pacstrap /mnt base linux-zen linux-firmware "${FS_UTILS[@]}"
 	genfstab -U /mnt > /mnt/etc/fstab
 	sed -i 's|^keyserver .*$|keyserver hkp://keyserver.ubuntu.com:80|' /mnt/etc/pacman.d/gnupg/gpg.conf
+	sleep 1
 	arch-chroot /mnt pacman-key --recv-key 3056513887B78AEB
 	arch-chroot /mnt pacman-key --lsign-key 3056513887B78AEB
 	arch-chroot /mnt pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
@@ -139,34 +149,39 @@ install() {
 		[chaotic-aur]
 		Include = /etc/pacman.d/chaotic-mirrorlist
 	EOF
+	sed -i "s|^#IgnorePkg.*$|IgnorePkg=sudo|" /mnt/etc/pacman.conf
 	arch-chroot /mnt pacman -Sy --noconfirm --needed acpilight alacritty \
 													 betterlockscreen bspwm \
-													 celluloid chromium \
-													 dunst \
+													 chromium \
+													 dhcpcd doas dunst \
 													 efibootmgr eog \
 													 fish \
 													 grub gvfs-mtp \
+													 iwd \
 													 libnotify lxappearance-gtk3 lycusos-configs lycusos-hooks \
-													 neovim networkmanager nitrogen noto-fonts \
+													 mpv \
+													 neovim nitrogen noto-fonts \
 													 orchis-theme-git \
-													 pamixer picom-ibhagwan-git polkit-gnome polybar pulseaudio \
+													 pamixer pamac picom-ibhagwan-git pipewire-pulse polkit-gnome polybar \
 													 rofi \
-													 scrot sudo sxhkd \
+													 scrot sxhkd \
 													 tar tela-circle-icon-theme-git thunar ttf-font-awesome \
 													 unzip \
 													 vimix-cursors \
 													 xarchiver xorg-server xorg-xinit xorg-xsetroot \
 													 zip \
 													 "${cpu_microcode}" "${video_drivers[@]}"
-	arch-chroot /mnt systemctl enable NetworkManager
+	arch-chroot /mnt systemctl enable dhcpcd iwd
 	arch-chroot /mnt mkinitcpio -P
 	arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=LycusOS
 	arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+	echo "permit persist :wheel" > /etc/doas.conf
+	ln -s /mnt/usr/bin/doas /mnt/usr/local/bin/sudo
+	ln -s /mnt/usr/bin/nvim /mnt/usr/local/bin/vim
 	if dmesg | grep -i "bluetooth" > /dev/null; then
-		arch-chroot /mnt pacman -S --needed --noconfirm bluez bluez-utils pulseaudio-bluetooth
+		arch-chroot /mnt pacman -S --needed --noconfirm bluez bluez-utils
 		arch-chroot /mnt systemctl enable bluetooth
 	fi
-	sed -i "s|# %wheel ALL=(ALL) ALL|%wheel ALL=(ALL) ALL|" /mnt/etc/sudoers
 	echo "KEYMAP=${KEYMAP:-us}" > /mnt/etc/vconsole.conf
 }
 config() {
