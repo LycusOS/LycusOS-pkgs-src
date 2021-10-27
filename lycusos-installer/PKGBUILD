@@ -9,7 +9,7 @@ source=(
   ${pkgname}
 )
 
-sha512sums=('baa2136928b4b39447e8a7fa3ffee1dcb25d67e81111b7847c387b855af8b1754ea679c8d8855bd47fe30e8ac8dc3750385b87a870850d1ce98f2fc754b897bc')
+sha512sums=('96f8bf110c676f42244cc16fe6af457e8617f4d4f3fbf4c7ee143562dc93057c4046bc1527d7ceef4eb6b7480c2b48de2cba01036d07b1041ebe1c0dec2d930c')
 
 package() {
   install -Dm755 ${pkgname} $pkgdir/usr/bin/${pkgname}
