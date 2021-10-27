@@ -17,14 +17,11 @@ wlan() {
 partitions() {
 	formatter() {
 		local fstype="${1}"
-		if [[ -z "${FS_UTILS+x}" ]]; then
-			FS_UTILS=()
-		fi
 		case "${fstype}" in
-			"btrfs") FS_UTILS+=("btrfs-progs");;
-			"ext4") FS_UTILS+=("e2fsprogs");;
-			"f2fs") FS_UTILS+=("f2fs-tools");;
-			"fat32") FS_UTILS+=("dosfstools");;
+			"btrfs") FS_UTILS+=( "btrfs-progs" );;
+			"ext4") FS_UTILS+=( "e2fsprogs" );;
+			"f2fs") FS_UTILS+=( "f2fs-tools" );;
+			"fat32") FS_UTILS+=( "dosfstools" );;
 		esac
 		if [[ "${fstype}" == "fat32" ]]; then
 			fstype="vfat -F 32"
@@ -32,17 +29,17 @@ partitions() {
 		wipefs -a "${2}" && eval mkfs."${fstype}" "${2}"
 	}
 	mounter() {
-		if ! [[ "${2}" == "/" ]]; then
-			if ! findmnt /mnt > /dev/null; then
-				whiptail --msgbox "Please mount root(/) partition first..." 0 0
-				return 1
-			fi
-		fi
-		if [[ "${2}" == "other" ]]; then
-			mounter "${1}" $(whiptail --title "Mount ${1}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3)
-		else
-			mkdir -p /mnt/"${2}" && mount "${1}" /mnt/"${2}"
-		fi
+		case "${2}" in
+			"other") mounter "${1}" $(whiptail --title "Mount ${1}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3);;
+			"/") mount "${1}" /mnt/"${2}";;
+			*)
+				if ! findmnt /mnt > /dev/null; then
+					whiptail --msgbox "Please mount root(/) partition first..." 0 0
+				else
+					mkdir -p /mnt/"${2}" && mount "${1}" /mnt/"${2}"
+				fi
+			;;
+		esac
 	}
 	auto_partitions() {
 		title="Auto partitions" \
@@ -238,8 +235,9 @@ config() {
 				arch-chroot /mnt passwd "${user}"
 				if ! [[ "${?}" == 0 ]]; then
 					whiptail --msgbox "Couldn't set password for ${user}, please try again!" 0 0
+				else
+					arch-chroot /mnt systemctl enable betterlockscreen@"${user}"
 				fi
-				arch-chroot /mnt systemctl enable betterlockscreen@"${user}"
 			fi
 		}
 		title="Users" \
