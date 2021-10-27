@@ -31,7 +31,7 @@ partitions() {
 	mounter() {
 		case "${2}" in
 			"other") mounter "${1}" $(whiptail --title "Mount ${1}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3);;
-			"/") mount "${1}" /mnt/"${2}";;
+			"/") mount "${1}" /mnt;;
 			*)
 				if ! findmnt /mnt > /dev/null; then
 					whiptail --msgbox "Please mount root(/) partition first..." 0 0
