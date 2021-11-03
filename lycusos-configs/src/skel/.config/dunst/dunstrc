@@ -12,7 +12,9 @@
     progress_bar_min_width = 150
     progress_bar_max_width = 300
    
-   geometry = "200x38-12+62"
+    width = 200
+    height = 38
+    offset = -12x62
     transparency = 0
     notification_height = 0
     separator_height = 1
