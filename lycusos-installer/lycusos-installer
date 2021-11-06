@@ -151,7 +151,7 @@ install() {
 					 "tar" "tela-circle-icon-theme-git" "thunar" "ttf-font-awesome" \
 					 "unzip" \
 					 "vimix-cursors" \
-					 "xarchiver" "xorg-server" "xorg-xinit" "xorg-xsetroot" \
+					 "xarchiver" "xdg-user-dirs" "xorg-server" "xorg-xinit" "xorg-xsetroot" \
 					 "zip" )
 	local services=( "dhcpcd" )
 	case $(lscpu | grep "name" | awk '{print $3}') in
