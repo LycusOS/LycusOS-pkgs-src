@@ -10,22 +10,17 @@ key_layout() {
 wlan() {
 	local device=$(iwctl -- device list | grep -o '\w*wl\w*')
 	iwctl -- station "${device}" scan
-	iwctl -- station "${device}" get-networks
-	read -p "Enter network name/SSID: " ssid
-	iwctl -- station "${device}" connect "${ssid}"
+	title="Networks" \
+	menu $(iwctl station ${device} get-networks | sed 1,5d | awk '{print $1}')
+	iwctl -- station "${device}" connect "${selected_element}"
 }
 partitions() {
 	formatter() {
 		local fstype="${1}"
 		case "${fstype}" in
-			"btrfs") FS_UTILS+=( "btrfs-progs" );;
-			"ext4") FS_UTILS+=( "e2fsprogs" );;
-			"f2fs") FS_UTILS+=( "f2fs-tools" );;
-			"fat32") FS_UTILS+=( "dosfstools" );;
+			"fat32") fstype="vfat -F 32";;
+			"ntfs") fstype="ntfs -f";;
 		esac
-		if [[ "${fstype}" == "fat32" ]]; then
-			fstype="vfat -F 32"
-		fi
 		wipefs -a "${2}" && eval mkfs."${fstype}" "${2}"
 	}
 	mounter() {
@@ -77,7 +72,7 @@ partitions() {
 			if [[ "${?}" == "0" ]]; then
 				local partition="${selected_element}"
 				title="${partition}" \
-				menu "btrfs" "ext4" "f2fs" "fat32"
+				menu "btrfs" "ext4" "fat32" "ntfs"
 				if [[ "${?}" == "0" ]]; then
 					formatter "${selected_element}" "${partition}"
 					whiptail --title "Format partitions" --yesno "Continue to format partitions?" 0 0 3>&1 1>&2 2>&3
@@ -116,7 +111,16 @@ install() {
 		whiptail --msgbox "Please mount the partitions first..." 0 0
 		return 1
 	fi
-	pacstrap /mnt base linux-zen linux-firmware "${FS_UTILS[@]}"
+	local fs_utils=()
+	for i in $(lsblk -fno fstype | tr ' ' '\n' | sort -u); do
+		case "${i}" in
+			"btrfs") fs_utils+=( "btrfs-progs" );;
+			"ext4") fs_utils+=( "e2fsprogs" );;
+			"ntfs") fs_utils+=( "ntfs-3g" );;
+			"vfat") fs_utils+=( "dosfstools" );;
+		esac
+	done
+	pacstrap /mnt base linux-zen linux-firmware "${fs_utils[@]}"
 	genfstab -U /mnt > /mnt/etc/fstab
 	echo "KEYMAP=${KEYMAP:-us}" > /mnt/etc/vconsole.conf
 	echo "keyserver hkp://keyserver.ubuntu.com:80" >> /mnt/etc/pacman.d/gnupg/gpg.conf
@@ -134,24 +138,16 @@ install() {
 		Include = /etc/pacman.d/chaotic-mirrorlist
 	EOF
 	sed -i "s|^#IgnorePkg.*$|IgnorePkg=sudo|" /mnt/etc/pacman.conf
-	local packages=( "acpilight" "alacritty" \
-					 "betterlockscreen" "bspwm" \
-					 "chromium" \
-					 "dhcpcd" "doas" "dunst" \
-					 "efibootmgr" "eog" \
-					 "fish" \
-					 "grub" "gvfs-mtp" \
-					 "libnotify" "lxappearance-gtk3" "lycusos-configs" "lycusos-hooks" \
-					 "micro" "mpv" \
-					 "nitrogen" "noto-fonts" \
-					 "orchis-theme-git" \
-					 "pamixer" "pamac" "picom-ibhagwan-git" "pipewire-pulse" "polkit-gnome" "polybar" \
-					 "rofi" \
-					 "scrot" "sxhkd" \
-					 "tar" "tela-circle-icon-theme-git" "thunar" "ttf-font-awesome" \
-					 "unzip" \
-					 "vimix-cursors" \
-					 "xarchiver" "xdg-user-dirs" "xorg-server" "xorg-xinit" "xorg-xsetroot" \
+	local packages=( "chromium"
+					 "dhcpcd" "doas"
+					 "efibootmgr" "eog"
+					 "grub" "gvfs-mtp"
+					 "libnotify" "lxappearance-gtk3" "lycusos-configs" "lycusos-hooks"
+					 "micro" "mpv"
+					 "pamixer" "pamac" "pipewire-pulse"
+					 "tar" "thunar"
+					 "unzip"
+					 "xarchiver"
 					 "zip" )
 	local services=( "dhcpcd" )
 	case $(lscpu | grep "name" | awk '{print $3}') in
