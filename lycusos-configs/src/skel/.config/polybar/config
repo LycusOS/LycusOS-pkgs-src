@@ -74,9 +74,9 @@ type = internal/network
 interface = wlan0
 interval = 3.0
 format-connected = %{A1:~/.config/rofi/scripts/rofi-wifi-menu:} %{A}
-format-disconnected = <label-disconnected>
 label-disconnected =  
 label-disconnected-foreground = ${colors.foreground-alt}
+format-disconnected = %{A1:~/.config/rofi/scripts/rofi-wifi-menu:}<label-disconnected>%{A}
 
 [module/date]
 type = internal/date

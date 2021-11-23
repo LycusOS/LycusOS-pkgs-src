@@ -5,6 +5,18 @@ pkgdesc='LycusOS configs'
 arch=('any')
 license=('GPL3')
 install="${pkgname}.install"
+depends=('acpilight' 'alacritty'
+		 'betterlockscreen' 'bspwm'
+		 'dunst'
+		 'fish'
+		 'nitrogen' 'noto-fonts'
+		 'orchis-theme-git'
+		 'picom-ibhagwan-git' 'polkit-gnome' 'polybar'
+		 'rofi'
+		 'scrot' 'sxhkd'
+		 'tela-circle-icon-theme-git' 'ttf-font-awesome'
+		 'vimix-cursors'
+		 'xdg-user-dirs' 'xorg-server' 'xorg-xinit' 'xorg-xsetroot' )
 package() {
 	mkdir -p "${pkgdir}"/{etc,usr/{share/backgrounds,local/bin}}
 	cp -r "${srcdir}"/skel "${pkgdir}"/etc/skel/
