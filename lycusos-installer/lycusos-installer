@@ -166,11 +166,10 @@ install() {
 		services+=( "iwd" )
 	fi
 	if dmesg | grep "Bluetooth" > /dev/null; then
-		packages+=( "bluez" "bluez-utils" )
-		services+=( "bluetooth" )
+		packages+=( "bluetooth-suppot" )
 	fi
 	if dmesg | grep "battery" > /dev/null; then
-		packages+=( "tlp" "tlp-rdw" )
+		packages+=( "tlp" )
 		services+=( "tlp" )
 	fi
 	arch-chroot /mnt pacman -Sy --noconfirm --needed "${packages[@]}"
