@@ -145,7 +145,7 @@ install() {
 					 "libnotify" "lxappearance-gtk3" "lycusos-configs" "lycusos-hooks"
 					 "micro" "mpv"
 					 "pamixer" "pamac" "pipewire-pulse"
-					 "tar" "thunar"
+					 "tar"
 					 "unzip"
 					 "xarchiver"
 					 "zip" )

@@ -5,7 +5,7 @@ sleep 1
 done
 polybar topBar &
 picom -f &
-nitrogen --restore &
+pcmanfm --desktop &
 xsetroot -cursor_name left_ptr &
 dunst &
 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
