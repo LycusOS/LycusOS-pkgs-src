@@ -17,7 +17,14 @@ post_install() {
 	if ! cat /etc/shells | grep "bashfish"; then
 		echo "/usr/local/bin/bashfish" >> /etc/shells
 	fi
-}
-post_upgrade() {
-	post_install
+	if ! [[ -f "/etc/systemd/zram-generator.conf" ]]; then
+		for i in $(seq 0 $(expr $(nproc --all) - 1)); do
+			cat <<- EOF >> /etc/systemd/zram-generator.conf
+			[zram"${i}"]
+			zram-size=$(expr $(free -m | grep "Mem" | awk '{print $2}') / $(nproc --all))
+			compression-algorithm="lz4"
+
+			EOF
+		done
+	fi
 }

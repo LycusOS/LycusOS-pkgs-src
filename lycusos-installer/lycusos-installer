@@ -8,49 +8,39 @@ key_layout() {
 	fi
 }
 wlan() {
-	local device=$(iwctl -- device list | grep -o '\w*wl\w*')
-	iwctl -- station "${device}" scan
+	local device=$(iwctl device list | grep -o '\w*wl\w*')
+	iwctl station "${device}" scan
 	title="Networks" \
 	menu $(iwctl station ${device} get-networks | sed 1,5d | awk '{print $1}')
-	iwctl -- station "${device}" connect "${selected_element}"
+	iwctl station "${device}" connect "${selected_element}"
 }
 partitions() {
-	formatter() {
-		local fstype="${1}"
-		case "${fstype}" in
-			"fat32") fstype="vfat -F 32";;
-			"ntfs") fstype="ntfs -f";;
-		esac
-		wipefs -a "${2}" && eval mkfs."${fstype}" "${2}"
-	}
-	mounter() {
-		case "${2}" in
-			"other") mounter "${1}" $(whiptail --title "Mount ${1}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3);;
-			"/") mount "${1}" /mnt;;
-			*)
-				if ! findmnt /mnt > /dev/null; then
-					whiptail --msgbox "Please mount root(/) partition first..." 0 0
-				else
-					mkdir -p /mnt/"${2}" && mount "${1}" /mnt/"${2}"
-				fi
-			;;
-		esac
-	}
 	auto_partitions() {
 		title="Auto partitions" \
 		menu $(lsblk -dnp -o name)
 		if [[ "${?}" == "0" ]]; then
 			whiptail --title "Auto partitions" --yesno "Selected ${selected_element}, proceed?" 0 0 3>&1 1>&2 2>&3
 			if [[ "${?}" == "0" ]]; then
-				parted -s "${selected_element}" -- mklabel gpt
-				parted -s "${selected_element}" -- mkpart primary 1MiB 260MiB
-				parted -s "${selected_element}" -- mkpart primary 260MiB 100%
-				parted -s "${selected_element}" -- set 1 esp on
+				parted -s "${selected_element}" mklabel gpt
+				parted -s "${selected_element}" mkpart primary 1MiB 300MiB
+				parted -s "${selected_element}" mkpart primary 300MiB 100%
+				parted -s "${selected_element}" set 1 esp on
 				local partitions=($(blkid -o device "${selected_element}"* | sed '1d'))
-				formatter btrfs "${partitions[1]}"
-				formatter fat32 "${partitions[0]}"
-				mounter "${partitions[1]}" /
-				mounter "${partitions[0]}" /efi
+				wipefs -a "${partitions[0]}" && mkfs.vfat -F 32 "${partitions[0]}"
+				wipefs -a "${partitions[1]}" && mkfs.btrfs "${partitions[1]}"
+				local btrfs_mount_options=$(btrfs_mount_options "${partitions[1]}")
+				mount -o "${btrfs_mount_options}" "${partitions[1]}" /mnt
+				btrfs subvol create /mnt/@
+				btrfs subvol create /mnt/@home
+				btrfs subvol create /mnt/@root
+				btrfs subvol create /mnt/@var
+				umount -R /mnt
+				mount -o "${btrfs_mount_options}",subvol=@ "${partitions[1]}" /mnt
+				mkdir /mnt/{boot,home,root,var}
+				mount "${partitions[0]}" /mnt/boot
+				mount -o "${btrfs_mount_options}",subvol=@home "${partitions[1]}" /mnt/home
+				mount -o "${btrfs_mount_options}",subvol=@root "${partitions[1]}" /mnt/root
+				mount -o "${btrfs_mount_options}",subvol=@var "${partitions[1]}" /mnt/var
 			fi
 		fi
 	}
@@ -74,7 +64,12 @@ partitions() {
 				title="${partition}" \
 				menu "btrfs" "ext4" "fat32" "ntfs"
 				if [[ "${?}" == "0" ]]; then
-					formatter "${selected_element}" "${partition}"
+					if [[ "${selected_element}" == "fat32" ]]; then
+						selected_element="vfat -F 32"
+					elif [[ "${selected_element}" == "ntfs" ]]; then
+						selected_element="ntfs -f"
+					fi
+					wipefs -a "${partition}" && eval "mkfs.${selected_element} ${partition}"
 					whiptail --title "Format partitions" --yesno "Continue to format partitions?" 0 0 3>&1 1>&2 2>&3
 					if [[ "${?}" == "0" ]]; then
 						"${FUNCNAME[0]}"
@@ -88,10 +83,17 @@ partitions() {
 			if [[ "${?}" == "0" ]]; then
 				local partition="${selected_element}"
 				title="${partition}" \
-				menu "/" "/efi" "other"
+				menu "/" "/boot" "other"
 				if [[ "${?}" == "0" ]]; then
-					mounter "${partition}" "${selected_element}"
-					whiptail --title "Format partitions" --yesno "Continue to mount partitions?" 0 0 3>&1 1>&2 2>&3
+					if [[ "${selected_element}" == "other" ]]; then
+						selected_element=$(whiptail --title "Mount ${partition}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3 /)
+					fi
+					if [[ $(lsblk ${partition} -fno fstype) == "btrfs" ]]; then
+						mount -o $(btrfs_mount_options) "${partition}" "${selected_element}"
+					else
+						mount "${partition}" "${selected_element}"
+					fi
+					whiptail --title "Mount partitions" --yesno "Continue to mount partitions?" 0 0 3>&1 1>&2 2>&3
 					if [[ "${?}" == "0" ]]; then
 						"${FUNCNAME[0]}"
 					fi
@@ -101,6 +103,13 @@ partitions() {
 		title="Manual partitions" \
 		menu "Edit-partitions" "Format-partitions" "Mount-partitions"
 		action "edit_partitions" "format_partitions" "mount_partitions"
+	}
+	btrfs_mount_options() {
+		if [[ $(lsblk ${1} -d -no rota) == 0 ]]; then
+			echo "space_cache=v2,compress=zstd:1,commit=120,ssd"
+		else
+			echo "space_cache=v2,compress=zstd:1,commit=120,autodefrag"
+		fi
 	}
 	title="Partitions" \
 	menu "Auto-partition" "Manual-partition"
@@ -138,18 +147,19 @@ install() {
 		Include = /etc/pacman.d/chaotic-mirrorlist
 	EOF
 	sed -i "s|^#IgnorePkg.*$|IgnorePkg=sudo|" /mnt/etc/pacman.conf
-	local packages=( "chromium"
+	local packages=( "ananicy-cpp-git" "ananicy-rules-git" "chromium"
 					 "dhcpcd" "doas"
 					 "efibootmgr" "eog"
 					 "grub" "gvfs-mtp"
 					 "libnotify" "lxappearance-gtk3" "lycusos-configs" "lycusos-hooks"
+					 "irqbalance"
 					 "micro" "mpv"
-					 "pamixer" "pamac" "pipewire-pulse"
+					 "pamixer" "pamac" "pipewire-pulse" "preload"
 					 "tar"
 					 "unzip"
 					 "xarchiver"
-					 "zip" )
-	local services=( "dhcpcd" )
+					 "zip" "zram-generator" )
+	local services=( "ananicy-cpp" "dhcpcd" "irqbalance" "preload" "systemd-oomd" )
 	case $(lscpu | grep "name" | awk '{print $3}') in
 		"A"*) packages+=( "amd-ucode" );;
 		"I"*) packages+=( "intel-ucode" );;
@@ -177,7 +187,7 @@ install() {
 	arch-chroot /mnt ln -s /usr/bin/doas /usr/local/bin/sudo
 	echo "permit persist :wheel" > /mnt/etc/doas.conf
 	arch-chroot /mnt mkinitcpio -P
-	arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=LycusOS
+	arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=LycusOS
 	arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
 }
 config() {
