@@ -88,8 +88,8 @@ partitions() {
 					if [[ "${selected_element}" == "other" ]]; then
 						selected_element=$(whiptail --title "Mount ${partition}" --inputbox "Enter mountpoint" 0 0 3>&1 1>&2 2>&3 /)
 					fi
-					if [[ $(lsblk ${partition} -fno fstype) == "btrfs" ]]; then
-						mount -o $(btrfs_mount_options) "${partition}" "${selected_element}"
+					if [[ $(lsblk "${partition}" -fno fstype) == "btrfs" ]]; then
+						mount -o $(btrfs_mount_options "${partition}") "${partition}" "${selected_element}"
 					else
 						mount "${partition}" "${selected_element}"
 					fi
@@ -105,7 +105,7 @@ partitions() {
 		action "edit_partitions" "format_partitions" "mount_partitions"
 	}
 	btrfs_mount_options() {
-		if [[ $(lsblk ${1} -d -no rota) == 0 ]]; then
+		if [[ $(lsblk "${1}" -d -no rota) == 0 ]]; then
 			echo "space_cache=v2,compress=zstd:1,commit=120,ssd"
 		else
 			echo "space_cache=v2,compress=zstd:1,commit=120,autodefrag"
@@ -147,19 +147,19 @@ install() {
 		Include = /etc/pacman.d/chaotic-mirrorlist
 	EOF
 	sed -i "s|^#IgnorePkg.*$|IgnorePkg=sudo|" /mnt/etc/pacman.conf
-	local packages=( "ananicy-cpp-git" "ananicy-rules-git" "chromium"
+	local packages=( "chromium"
 					 "dhcpcd" "doas"
 					 "efibootmgr" "eog"
 					 "grub" "gvfs-mtp"
-					 "libnotify" "lxappearance-gtk3" "lycusos-configs" "lycusos-hooks"
 					 "irqbalance"
+					 "libnotify" "lxappearance-gtk3" "lycusos-configs" "lycusos-hooks"
 					 "micro" "mpv"
 					 "pamixer" "pamac" "pipewire-pulse" "preload"
-					 "tar"
+					 "tar" "timeshift-support"
 					 "unzip"
 					 "xarchiver"
 					 "zip" "zram-generator" )
-	local services=( "ananicy-cpp" "dhcpcd" "irqbalance" "preload" "systemd-oomd" )
+	local services=( "dhcpcd" "irqbalance" "preload" "systemd-oomd" )
 	case $(lscpu | grep "name" | awk '{print $3}') in
 		"A"*) packages+=( "amd-ucode" );;
 		"I"*) packages+=( "intel-ucode" );;
@@ -184,6 +184,7 @@ install() {
 	fi
 	arch-chroot /mnt pacman -Sy --noconfirm --needed "${packages[@]}"
 	arch-chroot /mnt systemctl enable "${services[@]}"
+	arch-chroot /mnt systemctl mask systemd-remount-fs.service
 	arch-chroot /mnt ln -s /usr/bin/doas /usr/local/bin/sudo
 	echo "permit persist :wheel" > /mnt/etc/doas.conf
 	arch-chroot /mnt mkinitcpio -P

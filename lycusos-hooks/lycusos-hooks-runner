@@ -24,14 +24,22 @@ os_release() {
         sed -i "${file}" -e "/^ID=/a \ID_LIKE=arch"
     fi
 }
+issues() {
+    sed -i "s|Arch Linux|LycusOS|g" /etc/issue /usr/share/factory/etc/issue
+}
 grub() {
     sed -i "s|{GRUB_DISTRIBUTOR} Linux|{GRUB_DISTRIBUTOR}|" /etc/grub.d/10_linux
-    local kernel_params=( "vm.vfs_cache_pressure=50" "nowatchdog" )
+    local kernel_params=( "vm.vfs_cache_pressure=50" "nowatchdog" "libahci.ignore_sss=1" "rw" "rootflags=$(cat /etc/fstab | grep "/ " | awk '{print $4}')" "quiet" "loglevel=3" "rd.systemd.show_status=auto" "rd.udev.log_level=3" )
+    if [[ $(findmnt -no fstype /) == "btrfs" ]]; then
+        kernel_params+=( "fsck.mode=skip" )
+    fi
     sed -i "s|^GRUB_DISTRIBUTOR=.*$|GRUB_DISTRIBUTOR=\"LycusOS\"|
             s|^GRUB_CMDLINE_LINUX_DEFAULT=.*$|GRUB_CMDLINE_LINUX_DEFAULT=\"${kernel_params[@]}\"|" /etc/default/grub
 }
-issues() {
-    sed -i "s|Arch Linux|LycusOS|g" /etc/issue /usr/share/factory/etc/issue
+mkinitcpio() {
+    sed -i "s|^HOOKS=(base udev|HOOKS=(systemd|
+            s|keyboard fsck)|keyboard)|
+            s|^#COMPRESSION=\"lz4\"|COMPRESSION=\"lz4\"|" /etc/mkinitcpio.conf
 }
 main() {
     case "${1}" in
@@ -39,6 +47,7 @@ main() {
         "os-release")      os_release
                            issues ;;
         "grub")            grub ;;
+        "mkinitcpio")      mkinitcpio ;;
         "")                os_release
                            lsb_release
                            issues

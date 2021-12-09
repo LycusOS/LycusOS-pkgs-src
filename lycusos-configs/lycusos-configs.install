@@ -27,4 +27,7 @@ post_install() {
 			EOF
 		done
 	fi
+	if ! [[ -f "/etc/sysctl.d/20-quiet-printk.conf" ]]; then
+		echo "kernel.printk = 3 3 3 3" > /etc/sysctl.d/20-quiet-printk.conf
+	fi
 }
